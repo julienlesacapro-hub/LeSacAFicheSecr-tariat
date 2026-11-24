@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visites plongeurs</title>
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="barre">
+  <div class="marque">
+    <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="14" fill="none" stroke="#a8741f" stroke-width="2.5"/>
+      <circle cx="16" cy="16" r="8.5" fill="#1b4552" stroke="#9fb7bd" stroke-width="1.5"/>
+      <g fill="#a8741f"><circle cx="16" cy="3.6" r="1.4"/><circle cx="16" cy="28.4" r="1.4"/><circle cx="3.6" cy="16" r="1.4"/><circle cx="28.4" cy="16" r="1.4"/></g>
+      <path d="M12 14.5c1.3-1.6 2.7-2.3 4-2.3" stroke="#edf2f0" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    </svg>
+    <strong id="nom-application">Visites plongeurs</strong>
+    <span id="nom-service"></span>
+  </div>
+  <nav aria-label="Navigation principale">
+    <button type="button" data-vue="visite" aria-current="page">Nouvelle visite</button>
+    <button type="button" data-vue="historique">Historique</button>
+    <button type="button" data-vue="parametres">Paramètres</button>
+    <button type="button" data-vue="aide">Aide</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ======================================================= Nouvelle visite -->
+  <section id="vue-visite" class="vue-visite">
+    <div id="bandeau-modeles" class="bandeau" hidden>
+      <p><strong>Aucun modèle Word installé.</strong> Importez une fois vos documents d'origine (fiches navette et certificats) : l'application les prépare automatiquement.</p>
+      <button type="button" class="bouton principal" data-aller="modeles">Importer mes documents</button>
+    </div>
+
+    <form id="formulaire" class="feuille" autocomplete="off" novalidate>
+      <fieldset class="bloc">
+        <legend>Identité</legend>
+        <div class="grille" id="champs-identite"></div>
+        <details class="repli" id="repli-militaire">
+          <summary>Grade, matricule, affectation</summary>
+          <div class="grille" id="champs-militaire"></div>
+        </details>
+      </fieldset>
+
+      <fieldset class="bloc">
+        <legend>Rendez-vous</legend>
+        <div class="ligne-rdv">
+          <div class="champ">
+            <label for="champ-DATE_RDV">Date du rendez-vous<span class="requis">*</span></label>
+            <input id="champ-DATE_RDV" class="date" data-cle="DATE_RDV" placeholder="jj/mm/aaaa" inputmode="numeric">
+          </div>
+          <button type="button" class="bouton" id="rdv-aujourdhui">Aujourd'hui</button>
+        </div>
+        <div id="motifs"></div>
+        <p><button type="button" class="lien" id="ajout-motif">Ajouter un second type de venue</button></p>
+      </fieldset>
+
+      <fieldset class="bloc" id="bloc-complements" hidden>
+        <legend>Compléments <small>demandés par les documents choisis</small></legend>
+        <div class="grille" id="champs-complements"></div>
+      </fieldset>
+    </form>
+
+    <aside class="synthese" aria-label="Synthèse">
+      <div class="cadran" aria-live="polite">
+        <div class="mesure">
+          <span>Âge au rendez-vous</span>
+          <div class="valeur vide" id="cadran-age">–</div>
+        </div>
+        <div class="mesure">
+          <span>Prochaine visite quadriennale</span>
+          <div class="valeur vide" id="cadran-vq">–</div>
+          <div class="note" id="cadran-vq-note"></div>
+          <div class="saisie-vq" id="cadran-vq-saisie" hidden>
+            <input id="saisie-vq" class="date" placeholder="jj/mm/aaaa" inputmode="numeric" aria-label="Date de la prochaine VQ">
+          </div>
+          <div><button type="button" class="lien" id="vq-modifier" hidden>Modifier</button>
+               <button type="button" class="lien" id="vq-retablir" hidden>Rétablir le calcul</button></div>
+        </div>
+        <div class="venue">
+          <div class="mesure">
+            <span>Type de venue (imprimé sur les fiches)</span>
+            <input id="saisie-venue" aria-label="Type de venue">
+            <div><button type="button" class="lien" id="venue-retablir" hidden>Rétablir</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panneau">
+        <h2>Documents <small id="docs-compte"></small></h2>
+        <ul class="docs" id="liste-docs"></ul>
+        <div class="ajout-doc"><select id="ajout-doc" aria-label="Ajouter un autre document"></select></div>
+      </div>
+
+      <ul class="alertes" id="alertes"></ul>
+
+      <button type="button" class="bouton principal grand" id="generer" disabled>Générer les documents</button>
+      <div class="raccourci">Raccourci : <kbd>Ctrl</kbd> + <kbd>Entrée</kbd></div>
+
+      <div class="panneau resultat" id="resultat" hidden>
+        <h2 id="resultat-titre">Documents créés</h2>
+        <p class="chemin" id="resultat-chemin"></p>
+        <ul id="resultat-fichiers"></ul>
+        <div class="actions">
+          <button type="button" class="bouton principal" id="res-dossier">Ouvrir le dossier</button>
+          <button type="button" class="bouton" id="res-imprimer">Imprimer tout</button>
+          <button type="button" class="bouton" id="res-nouvelle">Nouvelle visite</button>
+        </div>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ======================================================= Historique -->
+  <section id="vue-historique" hidden>
+    <div class="entete-vue">
+      <h1>Historique</h1>
+      <input type="search" class="recherche" id="recherche-historique" placeholder="Rechercher un nom, un numéro de dossier…">
+    </div>
+    <div class="cadre-tableau">
+      <table class="tableau">
+        <thead><tr><th>Rendez-vous</th><th>Nom</th><th>Prénom</th><th>Dossier</th><th>Type de venue</th><th>Créé le</th><th></th></tr></thead>
+        <tbody id="corps-historique"></tbody>
+      </table>
+      <div class="vide-vue" id="historique-vide" hidden>Aucune visite enregistrée. Les visites apparaissent ici après chaque génération.</div>
+    </div>
+    <p><button type="button" class="lien" id="vider-historique">Effacer tout l'historique</button></p>
+  </section>
+
+  <!-- ======================================================= Paramètres -->
+  <section id="vue-parametres" class="vue-parametres" hidden>
+    <nav class="sous-nav" aria-label="Rubriques des paramètres">
+      <button type="button" data-rubrique="general">Général</button>
+      <button type="button" data-rubrique="champs">Champs de saisie</button>
+      <button type="button" data-rubrique="types">Types de visite</button>
+      <button type="button" data-rubrique="aptitudes">Aptitudes</button>
+      <button type="button" data-rubrique="fiches">Fiches navette AXONE</button>
+      <button type="button" data-rubrique="certificats">Certificats</button>
+      <div class="sep"></div>
+      <button type="button" data-rubrique="modeles">Modèles Word</button>
+    </nav>
+    <div class="editeur">
+      <div id="editeur"></div>
+      <div class="barre-actions" id="barre-param">
+        <span class="etat" id="etat-param">Aucune modification.</span>
+        <button type="button" class="bouton danger" id="param-defaut">Revenir aux réglages d'origine</button>
+        <button type="button" class="bouton" id="param-annuler">Annuler</button>
+        <button type="button" class="bouton principal" id="param-enregistrer">Enregistrer les paramètres</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= Aide -->
+  <section id="vue-aide" hidden>
+    <div class="aide-texte">
+      <h1>Mode d'emploi</h1>
+      <h2>Préparer une visite</h2>
+      <ol>
+        <li>Saisissez l'identité. Les dates se tapent sans barres : <kbd>150680</kbd> devient 15/06/1980.</li>
+        <li>Choisissez le type de venue (VI, VIR, VQ, VA, VE…) puis l'aptitude. Pour une double venue, par exemple VQ PLD + VE ENTOPS, ajoutez un second type.</li>
+        <li>Vérifiez à droite l'âge, la date de la prochaine VQ et la liste des documents. Décochez un document pour ne pas le produire, ou ajoutez-en un avec la liste déroulante.</li>
+        <li>Cliquez sur <strong>Générer les documents</strong>. Les fichiers Word remplis sont rangés dans un dossier au nom du patient.</li>
+      </ol>
+      <h2>Ce que l'application calcule</h2>
+      <ul>
+        <li><strong>Âge</strong> : âge révolu le jour du rendez-vous.</li>
+        <li><strong>Prochaine VQ</strong> : date du rendez-vous + 4 ans, jour pour jour, pour les visites initiales, réactualisées et quadriennales. Pour une visite annuelle ou une expertise, saisissez la date de la VQ déjà programmée.</li>
+        <li><strong>Fiche navette</strong> : choisie selon le type de visite, l'aptitude et l'âge (moins de 40 ans, 40 ans et plus, 50 ans et plus). Le grisé des examens vient du modèle choisi.</li>
+        <li><strong>Certificat</strong> : choisi selon le type de visite et l'aptitude. La case « aptitude … » correspondant au type de visite est cochée (par exemple EXPERTISE QUADRIENNALE ou CONTROLE ANNUEL). Les cases de conclusion restent au médecin.</li>
+      </ul>
+      <h2>Modifier un document</h2>
+      <p>Les modèles sont des fichiers Word ordinaires rangés dans le dossier <em>modeles</em>. Ouvrez-en un dans Word (Paramètres › Modèles Word › Ouvrir), modifiez-le librement et enregistrez. Pour qu'une information soit remplie automatiquement, tapez sa balise à l'endroit voulu, accolades comprises, par exemple <code class="balise">{{NOM}}</code>.</p>
+      <p>Pour remplacer un document par une nouvelle version, deux possibilités : réimporter le fichier d'origine (Paramètres › Modèles Word › Importer), ou copier le nouveau .docx dans le dossier des modèles en ajoutant les balises. Pour ajouter un nouveau document, copiez-le dans le dossier des modèles puis déclarez-le dans Paramètres › Fiches navette ou Certificats.</p>
+      <h2>Balises disponibles</h2>
+      <table id="table-balises"><thead><tr><th>Balise</th><th>Contenu</th></tr></thead><tbody></tbody></table>
+      <h2>Mises en forme</h2>
+      <table>
+        <thead><tr><th>Écriture</th><th>Résultat</th></tr></thead>
+        <tbody>
+          <tr><td><code class="balise">{{DATE_VQ}}</code></td><td>21/11/2030 (format du réglage général)</td></tr>
+          <tr><td><code class="balise">{{DATE_VQ:jj/mm/aa}}</code></td><td>21/11/30</td></tr>
+          <tr><td><code class="balise">{{DATE_VQ:mm}}</code> et <code class="balise">{{DATE_VQ:aaaa}}</code></td><td>11 et 2030, pour des cases séparées</td></tr>
+          <tr><td><code class="balise">{{DATE_RDV:j mois aaaa}}</code></td><td>21 novembre 2026</td></tr>
+          <tr><td><code class="balise">{{DATE_RDV+1a:mm/aaaa}}</code></td><td>11/2027 (décalage : <code>+1a</code> an, <code>+6m</code> mois, <code>+15j</code> jours)</td></tr>
+          <tr><td><code class="balise">{{PRENOM|maj}}</code></td><td>JEAN (<code>maj</code>, <code>min</code>, <code>cap</code>)</td></tr>
+          <tr><td><code class="balise">{{SSA|x}}</code></td><td>X si la case est cochée, rien sinon</td></tr>
+        </tbody>
+      </table>
+      <p>Une balise inconnue de l'application ajoute automatiquement un champ dans la rubrique « Compléments » de la saisie : c'est le moyen le plus simple d'ajouter une information à un document.</p>
+      <h2>Où sont les fichiers</h2>
+      <p id="aide-dossiers"></p>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status"></div>
+<div class="voile" id="voile" hidden><div class="boite"><div class="tourne"></div><p id="voile-texte">Traitement en cours…</p></div></div>
+<datalist id="liste-modeles"></datalist>
+<script src="app.js"></script>
+</body>
+</html>
