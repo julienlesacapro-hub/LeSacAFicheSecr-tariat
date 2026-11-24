@@ -13,12 +13,25 @@ let defaut = null, cfg = null, inventaire = null, version = "";
 
 const copie = (o) => JSON.parse(JSON.stringify(o));
 
+/** Premier fichier disponible parmi plusieurs emplacements : site construit (défaut_config.json à côté
+ *  de index.html) ou dépôt publié tel quel par GitHub Pages (app/web/ → ../defaut_config.json). */
+async function lireDisponible(chemins, lecture) {
+  for (const c of chemins) {
+    try {
+      const r = await fetch(c, { cache: "no-cache" });
+      if (r.ok) return await lecture(r);
+    } catch (e) { /* emplacement suivant */ }
+  }
+  return null;
+}
+
 async function chargerDefaut() {
   if (defaut) return defaut;
-  const r = await fetch("defaut_config.json", { cache: "no-cache" });
-  if (!r.ok) throw new Error("Paramétrage par défaut introuvable.");
-  defaut = await r.json();
-  try { version = (await (await fetch("version.json", { cache: "no-cache" })).json()).version || ""; } catch (e) { version = ""; }
+  defaut = await lireDisponible(["defaut_config.json", "../defaut_config.json"], (r) => r.json());
+  if (!defaut) throw new Error("Paramétrage par défaut introuvable (defaut_config.json).");
+  version = (await lireDisponible(["version.json"], async (r) => (await r.json()).version))
+    || (await lireDisponible(["../__init__.py"], async (r) => ((await r.text()).match(/__version__\s*=\s*"([^"]+)"/) || [])[1]))
+    || "";
   return defaut;
 }
 

@@ -1,6 +1,6 @@
 /* Service worker : met l'application en cache pour qu'elle fonctionne sans connexion.
    La version (remplacée à la construction du site) change le nom du cache à chaque publication. */
-const VERSION = "__VERSION__";
+const VERSION = "__VERSION__"; // non remplacé si le dépôt est publié tel quel : stratégie « réseau d'abord » quand même
 const CACHE = "visites-plongeurs-" + VERSION;
 const FICHIERS = [
   "./", "index.html", "style.css", "app.js", "icone.svg", "manifest.webmanifest",
@@ -11,7 +11,11 @@ const FICHIERS = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FICHIERS.map((f) => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting()));
+  // fichier par fichier : un fichier absent (dépôt publié tel quel) n'empêche pas l'installation
+  e.waitUntil(caches.open(CACHE)
+    .then((c) => Promise.all(FICHIERS.concat(["../defaut_config.json", "../__init__.py"]).map((f) =>
+      fetch(new Request(f, { cache: "reload" })).then((r) => (r.ok ? c.put(f, r) : null)).catch(() => null))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (e) => {

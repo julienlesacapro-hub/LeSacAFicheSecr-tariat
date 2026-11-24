@@ -13,8 +13,8 @@ const { chromium, devices } = require("playwright");
   const erreurs = [];
   page.on("pageerror", (e) => erreurs.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error" && !m.text().startsWith("Failed to load resource")) erreurs.push(m.text()); });
-  // /api/identite : sonde normale (l'application vérifie si elle est servie par le logiciel Windows)
-  page.on("response", (r) => { if (r.status() >= 400 && !/\/(api\/identite|favicon\.ico)$/.test(r.url())) erreurs.push(`${r.status()} ${r.url()}`); });
+  // sondes normales : /api/identite (logiciel Windows ?), emplacements successifs du paramétrage par défaut (l'application vérifie si elle est servie par le logiciel Windows)
+  page.on("response", (r) => { if (r.status() >= 400 && !/\/(api\/identite|favicon\.ico|defaut_config\.json|version\.json|__init__\.py)$/.test(r.url())) erreurs.push(`${r.status()} ${r.url()}`); });
   page.on("dialog", (d) => d.accept());
   const debordement = () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   const rapport = { debordements: {} };

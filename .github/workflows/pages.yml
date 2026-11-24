@@ -27,15 +27,33 @@ jobs:
       name: github-pages
       url: ${{ steps.deploiement.outputs.page_url }}
     steps:
+      # Pages réglé sur « Deploy from a branch » : GitHub publie déjà le dépôt tel quel
+      # (index.html à la racine → app/web/). Ce déploiement ne s'applique qu'avec « GitHub Actions ».
+      - name: Mode de publication
+        id: mode
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mode=$(gh api "repos/${{ github.repository }}/pages" --jq .build_type 2>/dev/null || echo absent)
+          echo "build_type=$mode" >> "$GITHUB_OUTPUT"
+          if [ "$mode" != "workflow" ]; then
+            echo "::notice::GitHub Pages est en mode « $mode » : le dépôt est publié tel quel par GitHub. Pour publier le site construit, réglez Settings › Pages › Source sur « GitHub Actions »."
+          fi
       - uses: actions/checkout@v4
+        if: steps.mode.outputs.build_type == 'workflow'
       - uses: actions/setup-python@v5
+        if: steps.mode.outputs.build_type == 'workflow'
         with:
           python-version: "3.12"
       - name: Construction du site
+        if: steps.mode.outputs.build_type == 'workflow'
         run: python outils/construire_web.py site
       - uses: actions/configure-pages@v5
+        if: steps.mode.outputs.build_type == 'workflow'
       - uses: actions/upload-pages-artifact@v3
+        if: steps.mode.outputs.build_type == 'workflow'
         with:
           path: site
       - id: deploiement
+        if: steps.mode.outputs.build_type == 'workflow'
         uses: actions/deploy-pages@v4
