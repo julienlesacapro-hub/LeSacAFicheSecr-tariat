@@ -328,4 +328,26 @@ kbd { font: 12px var(--police-texte); border: 1px solid var(--trait-fort); borde
   .vue-parametres { grid-template-columns: 1fr; }
   .sous-nav { position: static; flex-direction: row; flex-wrap: wrap; }
   .feuille { padding: 8px 16px 20px; }
+  .aide-texte { padding: 4px 16px 20px; }
+  .encart { padding: 14px; }
+  .encart .rangee input { min-width: 0; }
+  .barre-actions { flex-wrap: wrap; }
+}
+
+/* ---------------------------------------------------------------- téléphone et tablette */
+.barre { padding-top: env(safe-area-inset-top); height: calc(56px + env(safe-area-inset-top)); }
+main { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+@media (max-width: 600px) {
+  .barre { flex-wrap: wrap; height: auto; gap: 0; padding: env(safe-area-inset-top) 0 0; }
+  .marque { padding: 10px 12px 4px; }
+  .barre nav { margin-left: 0; width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .barre nav button { flex: 1 0 auto; height: 44px; padding: 0 10px; }
+  .ligne-rdv .champ { width: auto; flex: 1; }
+  .synthese { position: static; }
+  .tableau th, .tableau td { white-space: nowrap; }
+}
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px; } /* évite le zoom automatique d'iOS */
+  .raccourci { display: none; }
+  .bouton, .barre nav button, .type, .aptitude { min-height: 44px; }
 }

@@ -231,3 +231,16 @@ def test_premier_lancement_mode_installe(tmp_path):
     (travail / "config" / "config.json").write_text('{"modifie": 1}', encoding="utf-8")
     chemins._initialiser(travail, programme)  # un second lancement n'écrase rien
     assert "modifie" in (travail / "config" / "config.json").read_text(encoding="utf-8")
+
+
+def test_export_paquet_parametrage(travail):
+    import io
+    import json
+    import zipfile
+    from app.serveur import Application
+    app = Application(travail)
+    with zipfile.ZipFile(io.BytesIO(app.exporter_paquet())) as z:
+        noms = z.namelist()
+        assert json.loads(z.read("config/config.json"))["general"]["ville"] == app.cfg["general"]["ville"]
+    assert "modeles/quadriennale/Certif PLB Quadri.docx" in noms
+    assert not any("_sauvegardes" in n for n in noms)

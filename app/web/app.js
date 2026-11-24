@@ -1,5 +1,9 @@
-/* Visites plongeurs — interface */
-"use strict";
+/* Visites plongeurs — interface
+   Deux modes :
+   * « windows » : ouverte par VisitesPlongeurs.exe (jeton dans l'adresse), l'interface parle au
+     serveur Python local (fichiers dans des dossiers, impression, conversion des .doc) ;
+   * « local » : ouverte dans un navigateur (téléphone, tablette, ordinateur), tout est calculé
+     dans la page par moteur/local.js et gardé sur l'appareil. */
 
 // ------------------------------------------------------------------ session
 const JETON = (() => {
@@ -12,7 +16,15 @@ const JETON = (() => {
   try { return sessionStorage.getItem("jeton"); } catch (e) { return null; }
 })();
 
+const MODE = JETON ? "windows" : "local";
+const LOCAL = MODE === "local";
+let moteurLocal = null;
+
 async function api(chemin, corps) {
+  if (LOCAL) {
+    moteurLocal = moteurLocal || await import("./moteur/local.js");
+    return moteurLocal.appeler(chemin, corps);
+  }
   const r = await fetch("/api/" + chemin, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Jeton": JETON || "" },
@@ -48,6 +60,34 @@ function el(tag, attrs, ...enfants) {
   return n;
 }
 const copie = (o) => JSON.parse(JSON.stringify(o));
+const mobile = () => window.matchMedia && matchMedia("(pointer: coarse)").matches;
+function octetsDe(r) {
+  if (r.octets) return r.octets;
+  const b = atob(r.base64);
+  const o = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) o[i] = b.charCodeAt(i);
+  return o;
+}
+async function remettre(nom, octets, type) {
+  const blob = new Blob([octets], { type: type || "application/octet-stream" });
+  if (mobile() && navigator.canShare) {
+    const f = new File([blob], nom, { type: blob.type });
+    if (navigator.canShare({ files: [f] })) {
+      try { await navigator.share({ files: [f], title: nom }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = el("a", { href: url, download: nom });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+async function exporterParametrage() {
+  voile("Préparation du paquet de paramétrage…");
+  try {
+    const r = await api("exporter");
+    await remettre(r.nom, octetsDe(r), "application/zip");
+  } catch (e) { toast(e.message, true); } finally { voile(null); }
+}
 function normaliserNom(s) {
   return (s || "").replace(/\\/g, "/").replace(/\.(docx|docm|dotx|doc|dot)$/i, "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase()
@@ -399,7 +439,7 @@ async function generer() {
     const r = await api("generer", { saisie: E.saisie });
     E.resultat = r;
     afficherResultat(r);
-    if (E.cfg.general.ouvrir_dossier_apres_generation) ouvrir(r.dossier);
+    if (E.cfg.general.ouvrir_dossier_apres_generation && !LOCAL) ouvrir(r.dossier);
     toast(r.fichiers.length > 1 ? `${r.fichiers.length} documents créés` : "Document créé");
   } catch (e) {
     if (e.donnees && e.donnees.alertes) {
@@ -415,10 +455,11 @@ async function generer() {
 function afficherResultat(r) {
   $("resultat").hidden = false;
   $("resultat-titre").textContent = r.fichiers.length > 1 ? `${r.fichiers.length} documents créés` : "Document créé";
-  $("resultat-chemin").textContent = r.dossier;
+  $("resultat-chemin").textContent = LOCAL ? `Visite : ${r.dossier}` : r.dossier;
   $("resultat-fichiers").replaceChildren(...r.fichiers.map((f) => el("li", {},
-    el("span", {}, f.nom), el("button", { type: "button", class: "lien", onclick: () => ouvrir(f.chemin) }, "Ouvrir"))));
+    el("span", {}, f.nom), el("button", { type: "button", class: "lien", onclick: () => ouvrir(f.chemin) }, LOCAL ? (mobile() ? "Partager" : "Télécharger") : "Ouvrir"))));
   $("res-imprimer").hidden = !E.etat.windows;
+  $("res-dossier").textContent = LOCAL ? (r.fichiers.length > 1 ? (mobile() ? "Tout partager (.zip)" : "Tout télécharger (.zip)") : (mobile() ? "Partager" : "Télécharger")) : "Ouvrir le dossier";
   const autres = r.alertes.filter((a) => a.niveau !== "erreur" && !E.apercu.alertes.some((b) => b.message === a.message));
   if (autres.length) $("alertes").append(...autres.map((x) => el("li", { class: "alerte " + x.niveau }, x.message)));
   $("resultat").scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -484,7 +525,7 @@ function brancherVisite() {
     E.saisie.documents_ajoutes.push(e.target.value); e.target.value = ""; planifierApercu();
   });
   $("generer").addEventListener("click", generer);
-  $("res-dossier").addEventListener("click", () => E.resultat && ouvrir(E.resultat.dossier));
+  $("res-dossier").addEventListener("click", () => E.resultat && ouvrir(LOCAL ? E.resultat.cle_dossier : E.resultat.dossier));
   $("res-imprimer").addEventListener("click", async () => {
     if (!E.resultat) return;
     try { await api("imprimer", { chemins: E.resultat.fichiers.map((f) => f.chemin) }); toast("Envoyé à l'imprimante par défaut"); }
@@ -519,7 +560,7 @@ function afficherHistorique() {
     el("td", { class: "nb" }, new Date(h.horodatage).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })),
     el("td", {}, el("div", { class: "actions" },
       el("button", { type: "button", class: "bouton petit", onclick: () => reprendre(h), title: "Préremplir une nouvelle visite avec cette identité" }, "Nouvelle visite"),
-      el("button", { type: "button", class: "bouton petit", onclick: () => ouvrir(h.dossier) }, "Dossier"),
+      LOCAL ? null : el("button", { type: "button", class: "bouton petit", onclick: () => ouvrir(h.dossier) }, "Dossier"),
       el("button", { type: "button", class: "bouton petit danger", onclick: () => supprimerHistorique(h) }, "Retirer"))))));
 }
 
@@ -733,24 +774,28 @@ function rubriqueGeneral(zone) {
     ["ouvrir_dossier_apres_generation", "Ouvrir automatiquement le dossier de la visite après génération"],
     ["historique_actif", "Garder un historique des visites sur ce poste"],
   ];
+  const sansObjet = LOCAL ? ["dossier_modeles", "dossier_sortie", "ouvrir_dossier_apres_generation"] : [];
   const form = el("div", { class: "formulaire-general" });
-  for (const [cle, libelle, type, indication, aide] of champs) {
+  for (const [cle, libelle, type, indication, aide] of champs.filter((c) => !sansObjet.includes(c[0]))) {
     const entree = el("input", { valeur: g[cle] === undefined ? "" : String(g[cle]), placeholder: indication || null, spellcheck: "false" });
     entree.addEventListener("input", () => { g[cle] = type === "nombre" ? Number(entree.value) : entree.value; marquerModifie(); });
     form.append(el("div", { class: "champ" + (aide ? " large" : "") }, el("label", {}, libelle), entree, aide ? el("span", { class: "aide" }, aide) : null));
   }
-  for (const [cle, libelle] of cases) {
+  for (const [cle, libelle] of cases.filter((c) => !sansObjet.includes(c[0]))) {
     const c = el("input", { type: "checkbox" });
     c.checked = !!g[cle];
     c.addEventListener("change", () => { g[cle] = c.checked; marquerModifie(); });
     form.append(el("div", { class: "champ large" }, el("label", { class: "case" }, c, libelle)));
   }
   zone.append(el("h1", {}, "Général"),
-    el("p", { class: "intro" }, `Dossier de l'application : ${E.etat.travail}. Le paramétrage est enregistré dans config\\config.json ; chaque enregistrement garde une copie de la version précédente.`),
+    el("p", { class: "intro" }, LOCAL
+      ? "Le paramétrage est gardé sur cet appareil. Pour reprendre celui du logiciel Windows, utilisez Paramètres › Modèles Word › Importer un paquet de paramétrage."
+      : `Dossier de l'application : ${E.etat.travail}. Le paramétrage est enregistré dans config\\config.json ; chaque enregistrement garde une copie de la version précédente.`),
     form);
 }
 
 function rubriqueModeles(zone) {
+  if (LOCAL) return rubriqueModelesLocale(zone);
   const source = el("input", { placeholder: "Ex. : C:\\Users\\…\\Documents\\Visites plongeurs (dossier qui contient vos sous-dossiers)", spellcheck: "false" });
   const etiquette = el("input", { type: "checkbox" });
   etiquette.checked = true;
@@ -793,7 +838,76 @@ function rubriqueModeles(zone) {
       el("div", { class: "rangee" }, verifier,
         el("button", { type: "button", class: "bouton", onclick: () => api("ouvrir-dossier", { quel: "modeles" }).catch((e) => toast(e.message, true)) }, "Ouvrir le dossier des modèles"),
         el("button", { type: "button", class: "bouton", onclick: () => api("ouvrir-dossier", { quel: "sortie" }).catch((e) => toast(e.message, true)) }, "Ouvrir le dossier des documents générés")),
-      verif));
+      verif),
+    el("div", { class: "encart" },
+      el("h2", {}, "Téléphone et tablette"),
+      el("p", {}, "Crée un paquet .zip contenant le paramétrage et les modèles préparés. Transférez-le sur le téléphone ou la tablette (courriel, clé, cloud) et importez-le dans l'application mobile : Paramètres › Modèles Word › Importer."),
+      el("div", { class: "rangee" }, el("button", { type: "button", class: "bouton", onclick: exporterParametrage }, "Exporter le paquet de paramétrage"))));
+}
+
+function rubriqueModelesLocale(zone) {
+  const etiquette = el("input", { type: "checkbox" });
+  etiquette.checked = true;
+  const rapport = el("div");
+  const envoyer = async (fichiers) => {
+    if (!fichiers.length) return;
+    const paquet = fichiers.some((f) => /\.zip$/i.test(f.name));
+    if (paquet && E.etat.modeles.length && !confirm("Un paquet de paramétrage remplace le paramétrage et tous les modèles de cet appareil. Continuer ?")) return;
+    voile("Import et préparation des modèles…");
+    try {
+      const r = await api("modeles/importer", { fichiers, remplacer_etiquette: etiquette.checked });
+      await chargerEtat();
+      if (r.paquet) { E.brouillon = copie(E.cfg); E.modifie = false; nouvelleVisite(E.saisie); }
+      rapport.replaceChildren(rapportImport(r));
+      toast(`${r.fichiers.length} fichier(s) importé(s)`);
+    } catch (e) { toast(e.message, true); } finally { voile(null); }
+  };
+  const choix = (attrs) => {
+    const i = el("input", Object.assign({ type: "file", hidden: true }, attrs));
+    i.addEventListener("change", () => { const f = [...i.files]; i.value = ""; envoyer(f); });
+    return i;
+  };
+  const entreeFichiers = choix({ multiple: true, accept: ".docx,.docm,.dotx,.doc,.zip,application/zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+  const entreeDossier = choix({ webkitdirectory: true, multiple: true });
+  const dossierPossible = "webkitdirectory" in entreeDossier && !mobile();
+
+  const verif = el("div");
+  const liste = el("div");
+  const dessinerListe = () => liste.replaceChildren(E.etat.modeles.length ? el("div", { class: "cadre-tableau" }, el("table", { class: "tableau" },
+    el("thead", {}, el("tr", {}, el("th", {}, "Modèle"), el("th", {}))),
+    el("tbody", {}, E.etat.modeles.map((m) => el("tr", {},
+      el("td", {}, m),
+      el("td", {}, el("div", { class: "actions" },
+        el("button", { type: "button", class: "bouton petit", onclick: () => api("ouvrir-modele", { modele: m }).catch((e) => toast(e.message, true)) }, mobile() ? "Partager" : "Télécharger"),
+        el("button", { type: "button", class: "bouton petit danger", onclick: async () => {
+          if (!confirm(`Supprimer le modèle « ${m} » de cet appareil ?`)) return;
+          try { await api("modeles/supprimer", { modele: m }); await chargerEtat(); dessinerListe(); } catch (e) { toast(e.message, true); }
+        } }, "Supprimer")))))))) : el("p", {}, "Aucun modèle sur cet appareil."));
+  dessinerListe();
+
+  zone.append(
+    el("h1", {}, "Modèles Word"),
+    el("p", { class: "intro" }, `${E.etat.modeles.length} modèle(s) gardé(s) sur cet appareil.`),
+    el("div", { class: "encart" },
+      el("h2", {}, "Importer"),
+      el("p", {}, "Le plus simple : importez le paquet de paramétrage (.zip) exporté par le logiciel Windows (Paramètres › Modèles Word › Exporter). Il contient les réglages et les modèles déjà préparés."),
+      el("p", {}, "Vous pouvez aussi choisir des documents Word d'origine (.docx) : les balises sont posées automatiquement. Les anciens fichiers .doc doivent d'abord être enregistrés au format .docx dans Word."),
+      el("p", {}, el("label", { class: "case" }, etiquette, "Remplacer l'encart « ETIQUETTE AMADEUS » des fiches navette par le nom, le prénom et la date de naissance")),
+      el("div", { class: "rangee" },
+        el("button", { type: "button", class: "bouton principal", onclick: () => entreeFichiers.click() }, "Choisir des fichiers (.zip ou .docx)…"),
+        dossierPossible ? el("button", { type: "button", class: "bouton", onclick: () => entreeDossier.click() }, "Choisir un dossier…") : null,
+        entreeFichiers, entreeDossier),
+      rapport),
+    el("div", { class: "encart" },
+      el("h2", {}, "Contrôler les modèles"),
+      el("p", {}, "Liste chaque modèle déclaré dans les règles, indique s'il est présent et quelles balises il contient."),
+      el("div", { class: "rangee" },
+        el("button", { type: "button", class: "bouton", onclick: async () => {
+          try { verif.replaceChildren(rapportVerification(await api("modeles/verifier"))); } catch (e) { toast(e.message, true); }
+        } }, "Vérifier les modèles"),
+        el("button", { type: "button", class: "bouton", onclick: exporterParametrage }, "Exporter le paquet de paramétrage")),
+      verif),
+    el("div", { class: "encart" }, el("h2", {}, "Modèles présents"), liste));
 }
 
 function rapportImport(r) {
@@ -820,7 +934,7 @@ function rapportVerification(r) {
         el("td", {}, el("div", {}, l.types.join(", ") || "tous types"), el("small", {}, l.aptitudes.join(", ") || "toutes aptitudes")),
         el("td", {}, el("span", { class: "statut " + (l.trouve ? "ok" : "erreur") }, l.trouve ? "Présent" : "Introuvable")),
         el("td", {}, el("div", { class: "balises-liste" }, l.balises.map((b) => el("code", { class: l.inconnues.includes(b) ? "inconnue" : null }, b)))),
-        el("td", {}, l.trouve ? el("button", { type: "button", class: "bouton petit", onclick: () => api("ouvrir-modele", { modele: l.trouve }).catch((e) => toast(e.message, true)) }, "Ouvrir dans Word") : null)))))),
+        el("td", {}, l.trouve ? el("button", { type: "button", class: "bouton petit", onclick: () => api("ouvrir-modele", { modele: l.trouve }).catch((e) => toast(e.message, true)) }, LOCAL ? "Télécharger" : "Ouvrir dans Word") : null)))))),
     r.orphelins.length ? el("p", {}, `Modèles présents mais utilisés par aucune règle (ajoutables à la main) : ${r.orphelins.join(" ; ")}`) : null);
 }
 
@@ -852,14 +966,29 @@ function remplirAide() {
   const lignes = E.cfg.champs.map((c) => [c.cle, c.libelle + (c.type === "date" ? " (date)" : c.type === "case" ? " (case)" : "")]).concat(calculees);
   document.querySelector("#table-balises tbody").replaceChildren(...lignes.map(([cle, lib]) =>
     el("tr", {}, el("td", {}, el("code", { class: "balise" }, `{{${cle}}}`)), el("td", {}, lib))));
-  $("aide-dossiers").textContent = `Modèles : ${E.etat.dossier_modeles}. Documents générés : ${E.etat.dossier_sortie}. Paramétrage : ${E.etat.travail}\\config\\config.json. Version ${E.etat.version}.`;
+  $("aide-dossiers").textContent = LOCAL
+    ? `Version pour navigateur, téléphone et tablette${E.etat.version ? " " + E.etat.version : ""}. Paramétrage, modèles et historique sont gardés sur cet appareil uniquement ; les documents produits sont téléchargés ou partagés (Word, Fichiers, courriel…).`
+    : `Modèles : ${E.etat.dossier_modeles}. Documents générés : ${E.etat.dossier_sortie}. Paramétrage : ${E.etat.travail}\\config\\config.json. Version ${E.etat.version}.`;
+  $("aide-installation").hidden = !LOCAL;
 }
 
 // ================================================================== démarrage
+async function servieParLeLogiciel() {
+  if (!["127.0.0.1", "localhost"].includes(location.hostname)) return false;
+  try {
+    const r = await fetch("/api/identite", { cache: "no-store" });
+    return r.ok && (await r.json()).application === "visites-plongeurs";
+  } catch (e) { return false; }
+}
+
 async function demarrer() {
-  if (!JETON) {
+  if (LOCAL && await servieParLeLogiciel()) {
     document.body.replaceChildren(el("p", { style: "padding:40px" }, "Lancez l'application depuis VisitesPlongeurs.exe."));
     return;
+  }
+  document.documentElement.dataset.mode = MODE;
+  if (LOCAL && "serviceWorker" in navigator && window.isSecureContext) {
+    navigator.serviceWorker.register("sw.js").catch(() => { /* hors ligne indisponible */ });
   }
   try {
     await chargerEtat();
@@ -885,7 +1014,7 @@ async function demarrer() {
   window.addEventListener("beforeunload", (e) => { if (E.modifie) { e.preventDefault(); e.returnValue = ""; } });
   brancherVisite();
   nouvelleVisite();
-  setInterval(() => api("signe").catch(() => {}), 15000);
+  if (!LOCAL) setInterval(() => api("signe").catch(() => {}), 15000);
 }
 
 demarrer();

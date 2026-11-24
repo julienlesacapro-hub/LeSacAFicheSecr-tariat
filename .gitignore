@@ -1,0 +1,16 @@
+# Données locales : jamais dans le dépôt (le dépôt est public)
+donnees/
+Documents générés/
+config/anciennes_versions/
+modeles/_sauvegardes/
+*.zip
+
+# Compilation
+build/
+dist/
+site/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+tests/web/package*.json

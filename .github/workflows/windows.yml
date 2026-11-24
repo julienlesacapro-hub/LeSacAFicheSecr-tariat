@@ -1,0 +1,66 @@
+# Logiciel Windows : compilation à chaque envoi sur main, publication dans « Releases » à chaque étiquette v*.
+name: Logiciel Windows
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  windows:
+    needs: tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dépendances
+        run: pip install -r requirements.txt pyinstaller
+      - name: Version
+        id: version
+        shell: bash
+        run: echo "version=$(python -c 'import app; print(app.__version__)')" >> "$GITHUB_OUTPUT"
+      - name: Compilation PyInstaller
+        run: pyinstaller --noconfirm VisitesPlongeurs.spec
+      - name: Version portable
+        shell: pwsh
+        run: |
+          $p = "dist\VisitesPlongeurs"
+          New-Item -ItemType Directory -Force "$p\config" | Out-Null
+          Copy-Item config\config.json "$p\config\"
+          Copy-Item -Recurse -Force modeles "$p\modeles"
+          Set-Content "$p\portable.txt" "Version portable : les données restent dans ce dossier."
+          Compress-Archive -Path "$p\*" -DestinationPath dist\VisitesPlongeurs-portable.zip
+          Remove-Item -Recurse "$p\config", "$p\modeles", "$p\portable.txt"
+      - name: Installateur Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DVersion=${{ steps.version.outputs.version }}" installateur.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VisitesPlongeurs-windows
+          path: |
+            dist/VisitesPlongeurs-installation.exe
+            dist/VisitesPlongeurs-portable.zip
+      - name: Publication (étiquette v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/VisitesPlongeurs-installation.exe
+            dist/VisitesPlongeurs-portable.zip
+          body: |
+            **Ordinateur (Windows)** : téléchargez `VisitesPlongeurs-installation.exe` (installation sans droits administrateur) ou `VisitesPlongeurs-portable.zip` (à décompresser, utilisable depuis un lecteur réseau).
+
+            **Téléphone, tablette, autre ordinateur** : ouvrez https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/ puis « Ajouter à l'écran d'accueil ».
