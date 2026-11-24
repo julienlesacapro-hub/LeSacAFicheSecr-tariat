@@ -1,0 +1,29 @@
+# Tests du moteur Python et parité avec le moteur JavaScript (navigateur, téléphone, tablette).
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Dépendances
+        run: |
+          pip install -r requirements.txt -r requirements-dev.txt
+          cd tests/web && npm install --no-save --no-package-lock playwright@1.63.0 && npx playwright install --with-deps chromium
+      - name: Tests (Python + parité JavaScript + parcours téléphone/tablette)
+        run: python -m pytest -q tests

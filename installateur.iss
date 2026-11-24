@@ -1,6 +1,8 @@
 ﻿; Installateur Windows de Visites plongeurs (Inno Setup 6)
 ; Installation dans le profil de l'utilisateur : aucun droit administrateur requis.
-#define Version "1.0.0"
+#ifndef Version
+  #define Version "1.1.0"
+#endif
 
 [Setup]
 AppId={{8C1E3D52-6E0B-4C59-9F3A-5C2D7A1B9E40}

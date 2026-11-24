@@ -1,12 +1,15 @@
 """Serveur local (127.0.0.1 uniquement) qui sert l'interface et l'API JSON."""
 from __future__ import annotations
 
+import base64
+import io
 import json
 import logging
 import mimetypes
 import secrets
 import threading
 import time
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -64,6 +67,16 @@ class Application:
         return p
 
     # -- actions
+    def exporter_paquet(self) -> bytes:
+        """Paquet .zip (paramétrage + modèles préparés) pour l'application téléphone et tablette."""
+        self.inventaire.rafraichir()
+        tampon = io.BytesIO()
+        with zipfile.ZipFile(tampon, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("config/config.json", json.dumps(self.cfg, ensure_ascii=False, indent=2))
+            for rel in self.inventaire.fichiers:
+                z.write(self.inventaire.chemin(rel), "modeles/" + rel)
+        return tampon.getvalue()
+
     def verifier_modeles(self) -> dict:
         self.inventaire.rafraichir()
         connues = {c["cle"] for c in self.cfg["champs"]} | regles.CLES_CALCULEES
@@ -128,8 +141,9 @@ def creer_gestionnaire(app: Application, dossier_web: Path):
                 return
             contenu = fichier.read_bytes()
             self.send_response(200)
-            type_mime = mimetypes.guess_type(fichier.name)[0] or "application/octet-stream"
-            if type_mime.startswith("text/") or type_mime in ("application/javascript", "image/svg+xml"):
+            type_mime = {".js": "text/javascript", ".webmanifest": "application/manifest+json"}.get(
+                fichier.suffix.lower()) or mimetypes.guess_type(fichier.name)[0] or "application/octet-stream"
+            if type_mime.startswith("text/") or type_mime in ("application/manifest+json", "image/svg+xml"):
                 type_mime += "; charset=utf-8"
             self.send_header("Content-Type", type_mime)
             self.send_header("Content-Length", str(len(contenu)))
@@ -233,6 +247,9 @@ def creer_gestionnaire(app: Application, dossier_web: Path):
                 return {"balises": docx_moteur.lister_balises(doc)}
             if chemin == "/api/parcourir":
                 return {"chemin": systeme.choisir_dossier(c.get("titre", "Choisissez un dossier"))}
+            if chemin == "/api/exporter":
+                return {"nom": "VisitesPlongeurs-parametrage.zip",
+                        "base64": base64.b64encode(app.exporter_paquet()).decode("ascii")}
             if chemin == "/api/quitter":
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
                 return {"ok": True}

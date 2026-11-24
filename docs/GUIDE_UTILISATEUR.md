@@ -13,6 +13,33 @@ Au premier lancement, Windows peut afficher « Windows a protégé votre ordinat
 
 L'application s'ouvre dans sa propre fenêtre (Microsoft Edge en mode application). Elle ne passe pas par Internet : tout reste sur le poste.
 
+## Téléphone, tablette ou autre ordinateur
+
+La même application existe sans installation, dans le navigateur. Adresse : **https://julienlesacapro-hub.github.io/LeSacAFicheSecr-tariat/**
+
+1. Ouvrez l'adresse une fois avec une connexion.
+2. Installez-la sur l'écran d'accueil :
+   * **iPhone, iPad** (Safari) : bouton Partager › « Sur l'écran d'accueil » ;
+   * **Android** (Chrome) : menu ⋮ › « Installer l'application » ;
+   * **ordinateur** (Edge, Chrome) : icône d'installation à droite de la barre d'adresse.
+3. Sur le **logiciel Windows**, ouvrez Paramètres › Modèles Word › **Exporter le paquet de paramétrage**. Vous obtenez `VisitesPlongeurs-parametrage.zip` (réglages + modèles préparés).
+4. Transférez ce fichier sur l'appareil (courriel, cloud, câble), puis dans l'application : Paramètres › Modèles Word › **Choisir des fichiers** › le .zip.
+
+Ensuite, l'application fonctionne **sans connexion**. Les documents produits sont proposés au partage (téléphone, tablette : Word, Fichiers, courriel…) ou téléchargés (ordinateur). Une double venue ou plusieurs documents donnent un .zip.
+
+Différences avec le logiciel Windows :
+
+| | Logiciel Windows | Navigateur, téléphone, tablette |
+|---|---|---|
+| Documents produits | Rangés dans un dossier par visite | Partagés ou téléchargés |
+| Impression directe | Oui (Word) | Non : ouvrez le document dans Word puis imprimez |
+| Import de fichiers `.doc` | Oui (conversion par Word) | Non : `.docx` uniquement, ou paquet de paramétrage |
+| Données (réglages, modèles, historique) | Dossier sur le poste ou le réseau | Sur l'appareil seulement, non partagées |
+
+Les règles et les documents produits sont strictement identiques : un test automatique compare, à chaque modification, les fichiers Word des deux versions.
+
+Les données restent sur l'appareil. Effacer les données du navigateur (ou désinstaller l'application) les supprime : gardez le paquet de paramétrage. Après une modification des réglages sur le poste Windows, exportez et réimportez le paquet sur les appareils.
+
 ## Premier lancement : importer vos documents
 
 1. Ouvrez **Paramètres › Modèles Word**.
