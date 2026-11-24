@@ -34,7 +34,9 @@ La page **Releases** reçoit alors :
 * `VisitesPlongeurs-installation.exe` : installateur par utilisateur, sans droits administrateur, avec raccourcis menu Démarrer et bureau ;
 * `VisitesPlongeurs-portable.zip` : version à décompresser, utilisable depuis un lecteur réseau.
 
-La page **GitHub Pages** (application mobile) est republiée à chaque envoi sur `main`. Une seule fois, dans le dépôt : **Settings › Pages › Build and deployment › Source : GitHub Actions**.
+La page **GitHub Pages** (application mobile) est republiée à chaque envoi sur `main`, quel que soit le réglage de Settings › Pages :
+* **Source : GitHub Actions** (recommandé) : le site est construit par `outils/construire_web.py` ;
+* **Source : Deploy from a branch** (`main`, `/ (root)`) : le dépôt est publié tel quel et `index.html` à la racine ouvre l'application (`app/web/`).
 
 ## Confidentialité : ce dépôt est public
 

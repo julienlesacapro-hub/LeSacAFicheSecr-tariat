@@ -54,6 +54,20 @@ def site(tmp_path_factory):
     serveur.shutdown()
 
 
+@pytest.fixture(scope="module")
+def depot():
+    """Le dépôt servi tel quel, comme GitHub Pages en mode « Deploy from a branch »."""
+    racine = Path(__file__).resolve().parent.parent
+
+    class Silencieux(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+    serveur = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Silencieux, directory=str(racine)))
+    threading.Thread(target=serveur.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{serveur.server_address[1]}"
+    serveur.shutdown()
+
+
 def executer_js(site, taches, tmp_path):
     fichier = tmp_path / "taches.json"
     fichier.write_text(json.dumps({"taches": taches}, default=str), encoding="utf-8")
@@ -227,3 +241,27 @@ def test_parcours_telephone_tablette(site, travail, tmp_path, appareil):  # noqa
         assert sorted(z.namelist()) == sorted(f["nom"] for f in res["fichiers"])
         for f in res["fichiers"]:
             comparer_docx(Path(f["chemin"]).read_bytes(), z.read(f["nom"]), f["nom"])
+
+
+def test_lancement_depot_publie_tel_quel(depot, travail, tmp_path):  # noqa: F811
+    """GitHub Pages « depuis une branche » : la racine redirige vers l'application, qui démarre
+    et produit les mêmes documents (défaut_config.json et version lus dans le dépôt)."""
+    from app.serveur import Application
+    r = subprocess.run(["node", str(EXECUTEUR.parent / "racine.cjs"), depot], capture_output=True, text=True,
+                       timeout=120, cwd=EXECUTEUR.parent)
+    assert r.returncode == 0, r.stderr
+    res = json.loads(r.stdout.strip().splitlines()[-1])
+    assert res["url"].endswith("/app/web/") and res["erreurs"] == []
+    from app import __version__
+    assert __version__ in res["aide"]
+
+    paquet = tmp_path / "paquet.zip"
+    paquet.write_bytes(Application(travail).exporter_paquet())
+    sortie = tmp_path / "sortie"
+    sortie.mkdir()
+    r = subprocess.run(["node", str(EXECUTEUR.parent / "parcours.cjs"), depot + "/app/web", str(paquet), str(sortie)],
+                       capture_output=True, text=True, timeout=300, cwd=EXECUTEUR.parent)
+    assert r.returncode == 0, r.stderr
+    rapport = json.loads((sortie / "rapport.json").read_text(encoding="utf-8"))
+    assert rapport["erreurs"] == [] and rapport["vq"] == "21/11/2030" and len(rapport["fichiers"]) == 2
+    assert rapport["hors_ligne_documents"] == 2
